@@ -1,9 +1,8 @@
 # Time Tracker
 
-> Self-hosted freelance time tracker with screenshots, activity metrics, and a shareable client dashboard — no monthly subscription required.
+> Self-hosted freelance time tracker with screenshots, activity metrics, and a shareable client dashboard.
 
-Inspired by the Upwork Time Tracker. You run it on your own VPS or home server. Your client gets a live read-only link. You keep your money.
-
+Inspired by the Upwork Time Tracker. You run it on your own VPS or home server. Your client gets a live read-only link.
 ---
 
 ## Features
