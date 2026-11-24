@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 13px; color: #111; }
+  .page { padding: 48px 56px; max-width: 800px; margin: 0 auto; }
+
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+  .brand h1 { font-size: 22px; font-weight: 700; }
+  .brand p { color: #555; font-size: 12px; white-space: pre-line; }
+  .invoice-meta { text-align: right; }
+  .invoice-meta .number { font-size: 20px; font-weight: 700; color: #1a56db; }
+  .invoice-meta table { margin-top: 8px; }
+  .invoice-meta td { padding: 2px 0 2px 16px; color: #444; }
+  .invoice-meta td:first-child { color: #888; text-align: left; }
+
+  .parties { display: flex; gap: 40px; margin-bottom: 36px; }
+  .party h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #888; margin-bottom: 6px; }
+  .party p { white-space: pre-line; color: #222; line-height: 1.6; }
+
+  table.items { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  table.items th { background: #f4f6fa; text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #666; }
+  table.items td { padding: 14px 12px; border-bottom: 1px solid #eee; }
+  table.items td.num { text-align: right; }
+
+  .totals { display: flex; justify-content: flex-end; }
+  .totals table td { padding: 5px 0 5px 32px; }
+  .totals table td:first-child { color: #666; }
+  .totals table tr.grand td { font-weight: 700; font-size: 15px; border-top: 2px solid #111; padding-top: 10px; }
+
+  .notes { margin-top: 32px; padding-top: 20px; border-top: 1px solid #eee; color: #555; font-size: 12px; white-space: pre-line; }
+  .footer { margin-top: 48px; font-size: 11px; color: #aaa; text-align: center; }
+  .tracker-link { margin-top: 16px; font-size: 11px; color: #888; }
+  .tracker-link a { color: #1a56db; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="brand">
+      {% if profile.logo_url %}
+      <img src="{{ profile.logo_url }}" height="48" alt="logo" style="margin-bottom:8px;">
+      {% endif %}
+      <h1>{{ profile.company_name or profile.name }}</h1>
+      {% if profile.address %}
+      <p>{{ profile.address }}</p>
+      {% endif %}
+      {% if profile.tax_id %}
+      <p style="color:#888;font-size:11px;">{{ profile.tax_label }}: {{ profile.tax_id }}</p>
+      {% endif %}
+    </div>
+    <div class="invoice-meta">
+      <div class="number">{{ invoice.invoice_number }}</div>
+      <table>
+        <tr><td>Issued</td><td>{{ invoice.issued_at.strftime('%B %d, %Y') }}</td></tr>
+        {% if invoice.due_at %}
+        <tr><td>Due</td><td>{{ invoice.due_at.strftime('%B %d, %Y') }}</td></tr>
+        {% endif %}
+        <tr><td>Period</td><td>{{ invoice.period_start.strftime('%b %d') }} – {{ invoice.period_end.strftime('%b %d, %Y') }}</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="parties">
+    <div class="party">
+      <h3>From</h3>
+      <p>{{ profile.name }}{% if profile.company_name %}
+{{ profile.company_name }}{% endif %}
+{{ profile.email }}</p>
+    </div>
+    <div class="party">
+      <h3>Bill To</h3>
+      <p>{{ client.name }}{% if client.company_name %}
+{{ client.company_name }}{% endif %}
+{% if client.billing_email %}{{ client.billing_email }}{% endif %}
+{% if client.billing_address %}{{ client.billing_address }}{% endif %}</p>
+    </div>
+  </div>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th class="num">Hours</th>
+        <th class="num">Rate</th>
+        <th class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in invoice.line_items %}
+      <tr>
+        <td>{{ item.description }}</td>
+        <td class="num">{{ "%.2f"|format(item.hours) }}</td>
+        <td class="num">${{ "%.2f"|format(item.rate) }}</td>
+        <td class="num">${{ "%.2f"|format(item.amount) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="totals">
+    <table>
+      <tr><td>Subtotal</td><td>${{ "%.2f"|format(invoice.subtotal) }}</td></tr>
+      {% if invoice.tax_rate > 0 %}
+      <tr><td>{{ profile.tax_label }} ({{ invoice.tax_rate }}%)</td><td>${{ "%.2f"|format(invoice.tax_amount) }}</td></tr>
+      {% endif %}
+      <tr class="grand"><td>Total</td><td>${{ "%.2f"|format(invoice.total) }}</td></tr>
+    </table>
+  </div>
+
+  {% if profile.payment_instructions %}
+  <div class="notes">
+    <strong>Payment instructions</strong><br>
+    {{ profile.payment_instructions }}
+  </div>
+  {% endif %}
+
+  {% if invoice.notes %}
+  <div class="notes" style="margin-top:16px;">{{ invoice.notes }}</div>
+  {% endif %}
+
+  <div class="tracker-link">
+    Work log: <a href="{{ tracker_url }}">{{ tracker_url }}</a>
+  </div>
+
+  <div class="footer">Generated by Time Tracker</div>
+</div>
+</body>
+</html>
