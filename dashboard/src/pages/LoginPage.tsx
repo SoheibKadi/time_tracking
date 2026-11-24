@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,16 +12,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const setTokens = useAuthStore((s) => s.setTokens)
+  const login = useAuthStore((s) => s.login)
   const navigate = useNavigate()
+  const location = useLocation()
+  const registered = (location.state as { registered?: boolean } | null)?.registered
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      const { data } = await api.post('/v1/auth/login', { email, password })
-      setTokens(data.access_token, data.refresh_token)
+      await login(email, password)
       navigate('/dashboard')
     } catch {
       setError('Invalid email or password')
@@ -42,6 +42,11 @@ export default function LoginPage() {
           <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>
         <CardContent>
+          {registered && (
+            <p className="text-sm text-green-700 bg-green-50 rounded px-3 py-2 mb-4">
+              Account created! Sign in with your new credentials.
+            </p>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -70,6 +75,10 @@ export default function LoginPage() {
               {loading ? 'Signing in…' : 'Sign in'}
             </Button>
           </form>
+          <p className="text-center text-sm text-muted-foreground mt-4">
+            Don't have an account?{' '}
+            <Link to="/register" className="text-primary hover:underline">Register</Link>
+          </p>
         </CardContent>
       </Card>
     </div>

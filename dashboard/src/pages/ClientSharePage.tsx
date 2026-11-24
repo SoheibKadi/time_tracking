@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
@@ -161,13 +161,67 @@ function DisputeDialog({ window: win, token, onClose, onDisputed }: DisputeDialo
 export default function ClientSharePage() {
   const { token } = useParams<{ token: string }>()
   const [disputingWindow, setDisputingWindow] = useState<ShareWindow | null>(null)
+  const [wsConnected, setWsConnected] = useState(false)
+  const wsRef = useRef<WebSocket | null>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const queryClient = useQueryClient()
 
   const { data, isLoading, isError, dataUpdatedAt } = useQuery<ShareView>({
     queryKey: ['share', token],
     queryFn: async () => (await publicApi.get(`/share/${token}`)).data,
     enabled: !!token,
-    refetchInterval: 60_000,
   })
+
+  useEffect(() => {
+    if (!token) return
+
+    const connect = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = `${protocol}//${window.location.host}/ws/share/${token}`
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = () => setWsConnected(true)
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data) as ShareView & { type?: string }
+          if (msg.type !== 'ping') {
+            queryClient.setQueryData<ShareView>(['share', token], msg)
+          }
+        } catch {
+          // ignore malformed messages
+        }
+      }
+
+      ws.onerror = () => setWsConnected(false)
+
+      ws.onclose = () => {
+        setWsConnected(false)
+        reconnectTimerRef.current = setTimeout(connect, 5000)
+      }
+    }
+
+    connect()
+
+    // Polling fallback every 30s when WS is not open
+    pollTimerRef.current = setInterval(() => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        publicApi
+          .get(`/share/${token}`)
+          .then(({ data: d }) => queryClient.setQueryData<ShareView>(['share', token], d))
+          .catch(() => {})
+      }
+    }, 30_000)
+
+    return () => {
+      wsRef.current?.close()
+      wsRef.current = null
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
+    }
+  }, [token, queryClient])
 
   if (isLoading) {
     return (
@@ -216,10 +270,17 @@ export default function ClientSharePage() {
               </p>
             </div>
             <div className="text-right">
+            {wsConnected ? (
               <div className="inline-flex items-center gap-1.5 rounded-full bg-green-100 text-green-700 text-xs px-3 py-1 font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                Live — refreshes automatically
+                Live
               </div>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-yellow-100 text-yellow-700 text-xs px-3 py-1 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+                Reconnecting…
+              </div>
+            )}
               <p className="text-xs text-muted-foreground mt-1">
                 Updated {format(new Date(dataUpdatedAt), 'HH:mm:ss')}
               </p>

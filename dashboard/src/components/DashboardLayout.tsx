@@ -1,18 +1,23 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { FileText, Briefcase, User, LogOut, Clock } from 'lucide-react'
+import { FileText, Briefcase, User, LogOut, Clock, Shield, Settings } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-const navItems = [
-  { to: '/dashboard', label: 'Contracts', icon: Briefcase, end: true },
-  { to: '/dashboard/invoices', label: 'Invoices', icon: FileText, end: false },
-  { to: '/dashboard/profile', label: 'Profile', icon: User, end: false },
-]
-
 export default function DashboardLayout() {
   const logout = useAuthStore((s) => s.logout)
+  const role = useAuthStore((s) => s.role)
   const navigate = useNavigate()
+
+  const navItems = [
+    { to: '/dashboard', label: 'Contracts', icon: Briefcase, end: true },
+    { to: '/dashboard/invoices', label: 'Invoices', icon: FileText, end: false },
+    { to: '/dashboard/profile', label: 'Profile', icon: User, end: false },
+    { to: '/dashboard/blocklist', label: 'Blocklist', icon: Shield, end: false },
+    ...(role === 'admin'
+      ? [{ to: '/dashboard/admin', label: 'Admin', icon: Settings, end: false }]
+      : []),
+  ]
 
   const handleLogout = () => {
     logout()

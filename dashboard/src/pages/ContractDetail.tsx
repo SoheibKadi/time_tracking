@@ -1,16 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { format, differenceInMinutes, parseISO } from 'date-fns'
+import { format, differenceInMinutes, differenceInSeconds, parseISO } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { Copy, RefreshCw, ArrowLeft, Check, X, Eye } from 'lucide-react'
-import { api } from '@/lib/api'
+import { Copy, RefreshCw, ArrowLeft, Check, X, Eye, Download } from 'lucide-react'
+import { api, exportContractCSV, deleteScreenshot } from '@/lib/api'
 import type { Contract, TimeWindow } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
@@ -42,12 +44,43 @@ function windowStatusLabel(status: TimeWindow['status']) {
 
 interface ScreenshotThumbProps {
   windowId: string
+  windowEndedAt?: string
+  contractId?: string
 }
 
-function ScreenshotThumb({ windowId }: ScreenshotThumbProps) {
+function ScreenshotThumb({ windowId, windowEndedAt, contractId }: ScreenshotThumbProps) {
   const [revealed, setRevealed] = useState(false)
   const [fullSrc, setFullSrc] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [screenshotId, setScreenshotId] = useState<string | null>(null)
+  const [remaining, setRemaining] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (!windowEndedAt) return
+    if (timerRef.current) clearInterval(timerRef.current)
+    const age = differenceInSeconds(new Date(), parseISO(windowEndedAt))
+    const rem = Math.max(0, 60 - age)
+    if (rem <= 0) return
+    setRemaining(rem)
+    timerRef.current = setInterval(() => {
+      setRemaining((r) => {
+        if (r <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current)
+          return 0
+        }
+        return r - 1
+      })
+    }, 1000)
+    api.get<{ id?: string; url: string }>(`/v1/screenshots/${windowId}/image`)
+      .then(({ data }) => { if (data.id) setScreenshotId(data.id) })
+      .catch(() => {})
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [windowId, windowEndedAt])
 
   const handleClick = async () => {
     if (!revealed) {
@@ -56,8 +89,9 @@ function ScreenshotThumb({ windowId }: ScreenshotThumbProps) {
     }
     setLoading(true)
     try {
-      const { data } = await api.get(`/v1/screenshots/${windowId}/image`)
+      const { data } = await api.get<{ id?: string; url: string }>(`/v1/screenshots/${windowId}/image`)
       setFullSrc(data.url)
+      if (data.id) setScreenshotId(data.id)
     } catch {
       // ignore
     } finally {
@@ -65,8 +99,20 @@ function ScreenshotThumb({ windowId }: ScreenshotThumbProps) {
     }
   }
 
+  const handleDelete = async () => {
+    if (!screenshotId) return
+    try {
+      await deleteScreenshot(screenshotId)
+      queryClient.invalidateQueries({ queryKey: ['windows', contractId] })
+      toast({ title: 'Screenshot deleted' })
+      setRemaining(0)
+    } catch {
+      toast({ title: 'Failed to delete screenshot', variant: 'destructive' })
+    }
+  }
+
   return (
-    <>
+    <div className="flex items-center gap-2">
       <button
         onClick={handleClick}
         className={cn(
@@ -84,6 +130,11 @@ function ScreenshotThumb({ windowId }: ScreenshotThumbProps) {
           </div>
         )}
       </button>
+      {remaining > 0 && screenshotId && (
+        <Button size="sm" variant="destructive" className="text-xs h-7 px-2" onClick={handleDelete}>
+          Delete ({remaining}s)
+        </Button>
+      )}
       {fullSrc && (
         <Dialog open onOpenChange={() => setFullSrc(null)}>
           <DialogContent className="max-w-4xl">
@@ -91,7 +142,7 @@ function ScreenshotThumb({ windowId }: ScreenshotThumbProps) {
           </DialogContent>
         </Dialog>
       )}
-    </>
+    </div>
   )
 }
 
@@ -100,6 +151,10 @@ export default function ContractDetail() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const [csvOpen, setCsvOpen] = useState(false)
+  const [csvFrom, setCsvFrom] = useState('')
+  const [csvTo, setCsvTo] = useState('')
+  const [csvLoading, setCsvLoading] = useState(false)
 
   const { data: contracts } = useQuery<Contract[]>({
     queryKey: ['contracts'],
@@ -142,6 +197,29 @@ export default function ContractDetail() {
     const url = `${window.location.origin}/share/${contract.share_token}`
     navigator.clipboard.writeText(url)
     toast({ title: 'Share URL copied' })
+  }
+
+  const handleCSVDownload = async () => {
+    if (!csvFrom || !csvTo || !id) return
+    setCsvLoading(true)
+    try {
+      const response = await exportContractCSV(id, csvFrom, csvTo)
+      const blob = new Blob([response.data as BlobPart], { type: 'text/csv' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `contract-${id}-${csvFrom}-to-${csvTo}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      setCsvOpen(false)
+      toast({ title: 'CSV downloaded' })
+    } catch {
+      toast({ title: 'Failed to export CSV', variant: 'destructive' })
+    } finally {
+      setCsvLoading(false)
+    }
   }
 
   // Build chart data: activity per day
@@ -204,9 +282,50 @@ export default function ContractDetail() {
               <RefreshCw className={cn('h-4 w-4', regenerateToken.isPending && 'animate-spin')} />
               Regenerate Token
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setCsvOpen(true)}>
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* CSV Export Dialog */}
+      <Dialog open={csvOpen} onOpenChange={setCsvOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Export CSV</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="csv-from">From date</Label>
+              <Input
+                id="csv-from"
+                type="date"
+                value={csvFrom}
+                onChange={(e) => setCsvFrom(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="csv-to">To date</Label>
+              <Input
+                id="csv-to"
+                type="date"
+                value={csvTo}
+                onChange={(e) => setCsvTo(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCsvOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleCSVDownload}
+              disabled={csvLoading || !csvFrom || !csvTo}
+            >
+              {csvLoading ? 'Downloading…' : 'Download'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Activity Chart */}
       {chartPoints.length > 0 && (
@@ -312,7 +431,7 @@ export default function ContractDetail() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <ScreenshotThumb windowId={w.id} />
+                        <ScreenshotThumb windowId={w.id} windowEndedAt={w.ended_at} contractId={id} />
                       </TableCell>
                     </TableRow>
                   )

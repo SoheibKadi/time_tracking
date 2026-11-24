@@ -121,3 +121,17 @@ export interface AuthTokens {
   refresh_token: string
   token_type: string
 }
+
+export interface AuditLog {
+  id: string; user_id?: string; share_token?: string; action: string
+  details?: string; ip_address?: string; created_at: string
+}
+
+export interface BlocklistItem {
+  id: string; pattern: string; created_at: string
+}
+
+export interface AdminUser {
+  id: string; email: string; name: string; role: string
+  is_active: boolean; created_at: string
+}
