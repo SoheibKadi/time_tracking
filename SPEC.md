@@ -381,24 +381,24 @@ Overdue is computed on read; it is not stored as a separate status transition.
 
 ## 12. Phased Delivery
 
-### Phase 1 — MVP (self-hosted: Windows agent + API + basic dashboard)
-- [ ] Desktop agent: session control, screenshots, activity sampling, manual override, idle-detection prompt, sync
-- [ ] Backend: auth, contracts, windows, screenshots API, shareable link, dispute flow — Docker Compose deployment
-- [ ] Dashboard: worker view + client shareable live view
-- [ ] Invoicing: draft, PDF download, sent/paid tracking
+### Phase 1 — MVP (self-hosted: Windows agent + API + basic dashboard) ✅
+- [x] Desktop agent: session control, screenshots, activity sampling, manual override, idle-detection prompt, sync
+- [x] Backend: auth, contracts, windows, screenshots API, shareable link, dispute flow — Docker Compose deployment
+- [x] Dashboard: worker view + client shareable live view
+- [x] Invoicing: draft, PDF download, sent/paid tracking
 
-### Phase 2 — Cross-platform & polish
-- [ ] macOS and Linux agent support
-- [ ] Screenshot deletion grace period UI
-- [ ] Admin panel
-- [ ] CSV export of hours + activity
+### Phase 2 — Cross-platform & polish ✅
+- [x] macOS and Linux agent support (permission checks, graceful fallbacks)
+- [x] Screenshot deletion grace period UI
+- [x] Admin panel (user management, audit log)
+- [x] CSV export of hours + activity
 
-### Phase 3 — Advanced features
-- [ ] Application blocklist (blur sensitive apps in screenshots)
-- [ ] Multiple monitor support
-- [ ] Real-time activity push (WebSocket)
-- [ ] Mobile companion app (view-only)
-- [ ] Multi-tenant mode: allow multiple independent freelancers to self-register and use the same hosted instance
+### Phase 3 — Advanced features ✅
+- [x] Application blocklist (blur sensitive apps in screenshots)
+- [x] Multiple monitor support (all monitors stitched via mss.monitors[0])
+- [x] Real-time activity push (WebSocket WS /share/ws/{token})
+- [x] Mobile companion app (PWA manifest + service worker)
+- [x] Multi-tenant mode: ALLOW_REGISTRATION flag + self-registration endpoint
 
 ---
 
