@@ -69,9 +69,20 @@ class SyncAgent(threading.Thread):
             if not self._refresh_token_if_needed(client):
                 logger.warning("Authentication failed; skipping sync")
                 return
+            self._sync_blocklist(client)
             self._sync_sessions(client)
             self._sync_windows(client)
             self._sync_screenshots(client)
+
+    def _sync_blocklist(self, client: httpx.Client) -> None:
+        try:
+            r = client.get("/v1/blocklist")
+            if r.status_code == 200:
+                from tracker.blocklist import blocklist
+                patterns = [item["pattern"] for item in r.json()]
+                blocklist.update(patterns)
+        except Exception as exc:
+            logger.debug("Blocklist sync failed: %s", exc)
 
     def _sync_sessions(self, client: httpx.Client) -> None:
         db = SessionLocal()

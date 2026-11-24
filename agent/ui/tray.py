@@ -42,11 +42,34 @@ class TrayIcon(QSystemTrayIcon):
         # Start sync agent immediately
         self._sync_agent.start()
 
+        # macOS permission checks
+        self._check_platform_permissions()
+
         # Login if not configured
         if not config.access_token:
             self._do_login()
 
         self._controller.start()
+
+    def _check_platform_permissions(self) -> None:
+        import sys
+        if sys.platform != "darwin":
+            return
+        from tracker.platform_utils import check_screen_recording_macos, check_accessibility_macos
+        if not check_screen_recording_macos():
+            self.showMessage(
+                "Screen Recording permission needed",
+                "Open System Settings → Privacy & Security → Screen Recording and enable Time Tracker, then restart.",
+                QSystemTrayIcon.MessageIcon.Warning,
+                8000,
+            )
+        if not check_accessibility_macos():
+            self.showMessage(
+                "Accessibility permission needed",
+                "Open System Settings → Privacy & Security → Accessibility and enable Time Tracker for keyboard/mouse tracking.",
+                QSystemTrayIcon.MessageIcon.Warning,
+                8000,
+            )
 
     # ── menu ──────────────────────────────────────────────────────────────────
 

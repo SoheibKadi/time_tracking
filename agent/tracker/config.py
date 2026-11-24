@@ -17,6 +17,9 @@ class AgentConfig:
     idle_autopause_sec: int = int(os.getenv("IDLE_AUTOPAUSE_SEC", "120"))
     spool_dir: str = os.getenv("SPOOL_DIR", str(Path(__file__).parent.parent / "spool"))
 
+    # Phase 3: capture all monitors (True) or primary only (False)
+    capture_all_monitors: bool = os.getenv("CAPTURE_ALL_MONITORS", "true").lower() == "true"
+
     # Activity level formula constant: score = min(10, (keystrokes + clicks*5) / SCALE)
     activity_scale_factor: int = int(os.getenv("ACTIVITY_SCALE_FACTOR", "150"))
 
@@ -30,6 +33,7 @@ class AgentConfig:
             f"IDLE_TIMEOUT_MIN={self.idle_timeout_min}",
             f"SPOOL_DIR={self.spool_dir}",
             f"ACTIVITY_SCALE_FACTOR={self.activity_scale_factor}",
+            f"CAPTURE_ALL_MONITORS={str(self.capture_all_monitors).lower()}",
         ]
         _env_file.write_text("\n".join(lines) + "\n")
 

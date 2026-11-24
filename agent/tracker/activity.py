@@ -41,10 +41,25 @@ class ActivitySampler:
                 self._bucket.mouse_distance_px += dist
                 self._bucket._last_pos = (x, y)
 
-        self._listener_kb = keyboard.Listener(on_press=on_key_press, suppress=False)
-        self._listener_mouse = mouse.Listener(on_click=on_click, on_move=on_move)
-        self._listener_kb.start()
-        self._listener_mouse.start()
+        try:
+            self._listener_kb = keyboard.Listener(on_press=on_key_press, suppress=False)
+            self._listener_kb.start()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Keyboard listener failed to start (check Accessibility permission on macOS): %s", exc
+            )
+            self._listener_kb = None
+
+        try:
+            self._listener_mouse = mouse.Listener(on_click=on_click, on_move=on_move)
+            self._listener_mouse.start()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Mouse listener failed to start: %s", exc
+            )
+            self._listener_mouse = None
 
     def stop(self) -> None:
         if self._listener_kb:
