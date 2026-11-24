@@ -2,6 +2,8 @@
 
 > Self-hosted freelance time tracker with screenshots, activity metrics, and a shareable client dashboard.
 
+**© 2026 Soheyb Kadi — All rights reserved.** Source is publicly visible for reference; use, distribution, and hosting as a service require written permission. See [LICENSE](./LICENSE).
+
 Inspired by the Upwork Time Tracker. You run it on your own VPS or home server. Your client gets a live read-only link.
 ---
 
