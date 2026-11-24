@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.deps import get_db, get_current_user
-from app.models import User, WorkSession, TimeWindow, ActivitySample, WindowStatus
+from app.models import User, WorkSession, TimeWindow, ActivitySample, WindowStatus, Contract
 from app.schemas import WindowCreate, WindowOut, DisputeResolve
+from app.ws import mark_updated
 
 router = APIRouter(prefix="/windows", tags=["windows"])
 
@@ -41,8 +42,13 @@ def submit_window(body: WindowCreate, user: User = Depends(get_current_user), db
 
     db.commit()
     db.refresh(window)
-    return window
 
+    # Signal WebSocket clients watching this contract's share link
+    contract = db.query(Contract).filter(Contract.id == session.contract_id).first()
+    if contract:
+        mark_updated(str(contract.share_token))
+
+    return window
 
 @router.get("/contract/{contract_id}", response_model=List[WindowOut])
 def list_windows(

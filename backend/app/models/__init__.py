@@ -7,6 +7,7 @@ from app.models.window import TimeWindow, WindowStatus
 from app.models.screenshot import Screenshot
 from app.models.activity import ActivitySample
 from app.models.invoice import Invoice, InvoiceLineItem, InvoiceStatus
+from app.models.audit import AuditLog, BlocklistItem
 
 __all__ = [
     "Base",
@@ -18,4 +19,5 @@ __all__ = [
     "Screenshot",
     "ActivitySample",
     "Invoice", "InvoiceLineItem", "InvoiceStatus",
+    "AuditLog", "BlocklistItem",
 ]

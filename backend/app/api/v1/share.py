@@ -1,19 +1,26 @@
+import asyncio
+import json
 import uuid
 import smtplib
 import email.message
-from datetime import datetime, timezone
-from typing import List, Optional
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from app.deps import get_db
+from app.database import SessionLocal
 from app.models import Contract, WorkSession, TimeWindow, Screenshot, WindowStatus
-from app.schemas import WindowOut, DisputeRequest, ScreenshotOut
+from app.schemas import DisputeRequest
 from app.services.storage import get_presigned_url
 from app.config import settings
+from app.ws import pending_updates
 
 router = APIRouter(prefix="/share", tags=["share"])
+
+_ws_pool = ThreadPoolExecutor(max_workers=4)
 
 
 def _get_contract_by_token(token: uuid.UUID, db: Session) -> Contract:
@@ -137,3 +144,55 @@ def _notify_worker_dispute(contract: Contract, window: TimeWindow) -> None:
             smtp.send_message(msg)
     except Exception:
         pass  # Email is best-effort; never block the dispute action
+
+
+# ── Helpers shared with WebSocket ─────────────────────────────────────────────
+
+def _get_share_data_sync(token_str: str) -> Optional[dict]:
+    """Fetch full share view using its own DB session (safe to call from thread pool)."""
+    db = SessionLocal()
+    try:
+        contract = db.query(Contract).filter(Contract.share_token == token_str).first()
+        if not contract:
+            return None
+        windows = (
+            db.query(TimeWindow)
+            .join(WorkSession)
+            .filter(WorkSession.contract_id == contract.id)
+            .order_by(TimeWindow.started_at.desc())
+            .all()
+        )
+        return {
+            "contract_title": contract.title,
+            "hourly_rate": float(contract.hourly_rate),
+            "billable_hours": _billable_hours(windows),
+            "windows": [_window_to_dict(w, db) for w in windows],
+            "refreshed_at": datetime.now(timezone.utc).isoformat(),
+        }
+    finally:
+        db.close()
+
+
+# ── WebSocket real-time push ───────────────────────────────────────────────────
+
+@router.websocket("/ws/{token}")
+async def ws_realtime(token: uuid.UUID, ws: WebSocket):
+    await ws.accept()
+    loop = asyncio.get_running_loop()
+    token_str = str(token)
+    last_sent = datetime.now(timezone.utc) - timedelta(seconds=30)
+
+    try:
+        while True:
+            await asyncio.sleep(3)
+            update_time = pending_updates.get(token_str)
+            if update_time and update_time > last_sent:
+                data = await loop.run_in_executor(_ws_pool, lambda: _get_share_data_sync(token_str))
+                if data:
+                    await ws.send_json(data)
+                    last_sent = datetime.now(timezone.utc)
+            else:
+                await ws.send_json({"type": "ping"})
+    except (WebSocketDisconnect, Exception):
+        pass  # client disconnected
+

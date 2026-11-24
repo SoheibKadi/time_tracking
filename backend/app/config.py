@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     FIRST_ADMIN_PASSWORD: str = "changeme"
     FIRST_ADMIN_NAME: str = "Admin"
 
+    # Set to True to allow public self-registration
+    ALLOW_REGISTRATION: bool = False
+
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USER: str = ""

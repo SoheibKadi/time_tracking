@@ -1,11 +1,15 @@
+import csv
+import io
 import uuid
-from typing import List
+from datetime import date
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.deps import get_db, get_current_user
-from app.models import User, Organization, Contract, ClientProfile, FreelancerProfile
+from app.models import User, Organization, Contract, ClientProfile, FreelancerProfile, WorkSession, TimeWindow, ActivitySample
 from app.schemas import ContractCreate, ContractUpdate, ContractOut, FreelancerProfileUpdate, FreelancerProfileOut
 
 router = APIRouter(prefix="/contracts", tags=["contracts"])
@@ -87,6 +91,64 @@ def regenerate_share_token(
     db.commit()
     db.refresh(contract)
     return contract
+
+
+@router.get("/{contract_id}/export")
+def export_csv(
+    contract_id: uuid.UUID,
+    from_date: Optional[date] = Query(None),
+    to_date: Optional[date] = Query(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    contract = _get_contract_or_404(contract_id, user, db)
+
+    q = (
+        db.query(TimeWindow, WorkSession)
+        .join(WorkSession, TimeWindow.session_id == WorkSession.id)
+        .filter(WorkSession.contract_id == contract.id)
+    )
+    if from_date:
+        q = q.filter(TimeWindow.started_at >= from_date)
+    if to_date:
+        q = q.filter(TimeWindow.ended_at <= to_date)
+    rows = q.order_by(TimeWindow.started_at).all()
+
+    # Aggregate activity per window
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "date", "session_id", "window_start", "window_end",
+        "duration_min", "activity_level", "is_manual", "manual_reason",
+        "status", "keystrokes", "mouse_clicks", "mouse_distance_px",
+    ])
+
+    for window, session in rows:
+        samples = db.query(ActivitySample).filter(ActivitySample.window_id == window.id).all()
+        keystrokes = sum(s.keystrokes for s in samples)
+        clicks = sum(s.mouse_clicks for s in samples)
+        distance = sum(s.mouse_distance_px for s in samples)
+        duration = round((window.ended_at - window.started_at).total_seconds() / 60, 1)
+        writer.writerow([
+            window.started_at.strftime("%Y-%m-%d"),
+            str(session.id),
+            window.started_at.isoformat(),
+            window.ended_at.isoformat(),
+            duration,
+            window.activity_level if window.activity_level is not None else "",
+            window.is_manual,
+            window.manual_reason or "",
+            window.status.value,
+            keystrokes, clicks, distance,
+        ])
+
+    buf.seek(0)
+    filename = f"{contract.title.replace(' ', '_')}_export.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── Freelancer profile ────────────────────────────────────────────────────────

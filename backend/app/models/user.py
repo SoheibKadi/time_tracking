@@ -1,6 +1,6 @@
 import uuid
 import enum
-from sqlalchemy import Column, String, DateTime, Enum as SAEnum, func
+from sqlalchemy import Column, String, Boolean, DateTime, Enum as SAEnum, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -20,6 +20,7 @@ class User(Base):
     name = Column(String(255), nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(SAEnum(UserRole), nullable=False, default=UserRole.worker)
+    is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     freelancer_profile = relationship("FreelancerProfile", back_populates="user", uselist=False)
