@@ -83,7 +83,10 @@ def delete_screenshot(
     if not screenshot or screenshot.deleted_at:
         raise HTTPException(status_code=404, detail="Screenshot not found")
 
-    age = (datetime.now(timezone.utc) - screenshot.captured_at.replace(tzinfo=timezone.utc)).total_seconds()
+    captured_at = screenshot.captured_at
+    if captured_at.tzinfo is None:
+        captured_at = captured_at.replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - captured_at).total_seconds()
     if age > GRACE_PERIOD_SECONDS:
         raise HTTPException(status_code=400, detail="Grace period expired")
 
