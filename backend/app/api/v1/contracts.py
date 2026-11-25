@@ -1,7 +1,7 @@
 import csv
 import io
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -111,7 +111,7 @@ def export_csv(
     if from_date:
         q = q.filter(TimeWindow.started_at >= from_date)
     if to_date:
-        q = q.filter(TimeWindow.ended_at <= to_date)
+        q = q.filter(TimeWindow.ended_at < to_date + timedelta(days=1))
     rows = q.order_by(TimeWindow.started_at).all()
 
     # Aggregate activity per window
