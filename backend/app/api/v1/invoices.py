@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import List
 
@@ -39,7 +39,7 @@ def create_invoice(body: InvoiceCreate, user: User = Depends(get_current_user), 
         .filter(
             WorkSession.contract_id == contract.id,
             TimeWindow.started_at >= body.period_start,
-            TimeWindow.ended_at <= body.period_end,
+            TimeWindow.ended_at < body.period_end + timedelta(days=1),
             TimeWindow.status.notin_([WindowStatus.deleted, WindowStatus.accepted_dispute]),
         )
         .all()
