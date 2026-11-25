@@ -144,6 +144,155 @@ Your client can open the share link in any browser and see a live feed of your w
 | Stop stack | `./scripts/stop.sh` | `.\scripts\stop.ps1` |
 | View logs | `./scripts/logs.sh` | `docker compose logs -f` |
 | Update to latest | `./scripts/update.sh` | pull + re-run setup |
+| Start tunnel | `./scripts/tunnel.sh` | `.\scripts\tunnel.ps1` |
+
+---
+
+## Deployment Options
+
+The Quick Start above runs everything on a server you control (VPS or cloud VM). Two
+additional free options are supported when you don't want to maintain a server.
+
+---
+
+### Option A — Local machine + Cloudflare Tunnel (free)
+
+Run the entire stack on the **same Windows PC you use for tracking**, then expose it
+to the internet with [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/). No VPS, no port forwarding, no cost.
+
+```
+Your Windows PC
+  ├─ Desktop Agent (tracking)
+  ├─ Docker Desktop (backend + dashboard)
+  └─ cloudflared ──→ https://abc123.trycloudflare.com ──→ Client's browser
+```
+
+**Setup (10 minutes):**
+
+1. Run `./scripts/setup.sh` (or `.\scripts\setup.ps1`) to start the local stack.
+2. Run the tunnel:
+   ```bash
+   # Linux / macOS
+   ./scripts/tunnel.sh
+
+   # Windows
+   .\scripts\tunnel.ps1
+   ```
+   `cloudflared` is downloaded automatically if not installed.
+
+3. A URL like `https://abc123.trycloudflare.com` appears. Share it with your client.
+
+**Limitation:** the client link is offline whenever your machine is off. The URL also
+changes on restart in quick mode (see below for a permanent URL).
+
+#### Permanent URL (optional)
+
+For a stable URL that doesn't change between restarts:
+
+1. Create a free [Cloudflare account](https://cloudflare.com) and add your domain (or use a free `*.pages.dev` subdomain).
+2. Install and authenticate `cloudflared`:
+   ```bash
+   cloudflared login
+   cloudflared tunnel create time-tracker
+   ```
+3. Set `TUNNEL_NAME=time-tracker` in your shell before running the tunnel script.
+
+---
+
+### Option B — Cloud: Railway + Cloudflare R2 + Pages (free tier)
+
+Always-on cloud deployment using three free services — no VPS required.
+
+| Service | Purpose | Free tier |
+|---|---|---|
+| [Railway](https://railway.app) | Backend (FastAPI + PostgreSQL) | $5 credit/month |
+| [Cloudflare R2](https://cloudflare.com/products/r2/) | Screenshot storage | 10 GB / 1M ops free |
+| [Cloudflare Pages](https://pages.cloudflare.com) | Dashboard (static hosting) | Unlimited requests free |
+
+**Architecture:**
+
+```
+Desktop Agent ──HTTPS──→ Railway (FastAPI + PostgreSQL)
+                               │
+                        Cloudflare R2 (screenshots)
+                               │
+Client browser ──→ Cloudflare Pages (dashboard)
+```
+
+#### Step 1 — Set up Cloudflare R2
+
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → **R2** → **Create bucket** → name it `timetracker`.
+2. Go to **R2 → Manage R2 API Tokens** → **Create API Token** (Object Read & Write).
+3. Note your **Account ID**, **Access Key ID**, and **Secret Access Key**.
+
+#### Step 2 — Deploy the backend to Railway
+
+1. Install the Railway CLI and log in:
+   ```bash
+   npm install -g @railway/cli
+   railway login
+   ```
+
+2. From the project root, initialise and deploy:
+   ```bash
+   railway init          # creates a new project
+   railway up            # builds and deploys backend/Dockerfile
+   ```
+
+3. In the [Railway dashboard](https://railway.app/dashboard), open your project and:
+   - Add a **PostgreSQL** plugin — Railway auto-sets `DATABASE_URL`.
+   - Add these environment variables:
+
+   | Variable | Value |
+   |---|---|
+   | `SECRET_KEY` | `openssl rand -hex 32` output |
+   | `MINIO_ENDPOINT` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
+   | `AWS_ACCESS_KEY_ID` | Your R2 Access Key ID |
+   | `AWS_SECRET_ACCESS_KEY` | Your R2 Secret Access Key |
+   | `MINIO_BUCKET` | `timetracker` |
+   | `FIRST_ADMIN_EMAIL` | your email |
+   | `FIRST_ADMIN_PASSWORD` | a strong password |
+   | `ALLOW_REGISTRATION` | `false` |
+
+4. Note the Railway public URL (e.g. `https://time-tracker.railway.app`).
+
+#### Step 3 — Deploy the dashboard to Cloudflare Pages
+
+1. Install `wrangler` and log in:
+   ```bash
+   npm install -g wrangler
+   wrangler login
+   ```
+
+2. Build and deploy:
+   ```bash
+   # Linux / macOS
+   export RAILWAY_BACKEND_URL=https://time-tracker.railway.app
+   ./scripts/deploy-pages.sh
+
+   # Windows
+   $env:RAILWAY_BACKEND_URL = "https://time-tracker.railway.app"
+   .\scripts\deploy-pages.ps1
+   ```
+
+3. Your dashboard is live at `https://time-tracker.pages.dev`.
+
+#### Step 4 — Allow CORS on Railway
+
+Back in the Railway dashboard, add one more environment variable:
+
+```
+BACKEND_CORS_ORIGINS=["https://time-tracker.pages.dev"]
+```
+
+Railway redeploys automatically.
+
+#### Step 5 — Point the agent at Railway
+
+In `agent/agent.env`, set:
+```
+SERVER_URL=https://time-tracker.railway.app
+```
 
 ---
 
