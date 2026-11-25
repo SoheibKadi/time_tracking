@@ -60,12 +60,14 @@ def client(db):
     fake_sha256 = "a" * 64
 
     with patch("app.main._seed_admin"), \
-         patch("app.services.storage.upload_screenshot",
+         patch("app.api.v1.screenshots.upload_screenshot",
                return_value=("screenshots/test.png", "thumbnails/test.jpg", fake_sha256)), \
-         patch("app.services.storage.get_presigned_url",
+         patch("app.api.v1.screenshots.get_presigned_url",
                return_value="https://storage.example.com/img.png"), \
-         patch("app.services.storage.delete_object"), \
-         patch("app.services.pdf.render_invoice_pdf", return_value=b"%PDF-1.4 fake"):
+         patch("app.api.v1.screenshots.delete_object"), \
+         patch("app.api.v1.share.get_presigned_url",
+               return_value="https://storage.example.com/thumb.png"), \
+         patch("app.api.v1.invoices.render_invoice_pdf", return_value=b"%PDF-1.4 fake"):
         yield TestClient(app, raise_server_exceptions=True)
 
     app.dependency_overrides.clear()
